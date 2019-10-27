@@ -3,7 +3,7 @@ package dht
 import (
 	"crypto/sha1"
 
-	"golang.org/x/crypto/ed25519"
+	"github.com/fluturenet/ed25519"
 	"golang.org/x/exp/errors"
 
 	"github.com/anacrolix/torrent/bencode"
@@ -15,7 +15,7 @@ type StorageItem struct {
         Target [20]byte
         V interface{}
 	K ed25519.PublicKey
-	Salt string
+	Salt []byte
 	Sig [64]byte
 	Seq uint64
 
@@ -39,10 +39,15 @@ func (s *StorageItem) Calc() error{
                 return nil
         }
 
-//	target:=bencode.MustMarshal(s.K)
-//	seq:=bencode.MustMarshal(s.Seq)
+	s.K = s.PrivateKey.Public().(ed25519.PublicKey)
+	if s.Salt == nil {
+		s.Target = sha1.Sum(s.K)
+	} else {
+		s.Target = sha1.Sum(append(s.K,s.Salt...))
+	}
 
-
+	bts := s.bufferToSign()
+	copy(s.Sig[:],ed25519.Sign(s.PrivateKey,bts))
 	return nil
 }
 
@@ -55,11 +60,22 @@ func (s *StorageItem) Check() error{
 		if (s.Target == sha1.Sum(m)) {
 			return nil
 		}
-	fmt.Printf("error SIcheck: %s\t%s\n",s.Target,m)
 	return errors.New("Bad Item.")
 	}
 
 	return errors.New("Bad Item.")
+}
+
+func (s *StorageItem) bufferToSign() []byte {
+	var bts []byte
+	if s.Salt != nil {
+		bts = append(bts,[]byte("4:salt")...)
+		x := bencode.MustMarshal(s.Salt)
+		bts = append(bts,x...)
+	}
+	bts = append(bts,[]byte(fmt.Sprintf("3:seqi%de1:v",s.Seq))...)
+	bts = append(bts,bencode.MustMarshal(s.V)...)
+	return bts
 }
 
 func (s *Server) AddStorageItem(si StorageItem) bool {
@@ -68,7 +84,6 @@ func (s *Server) AddStorageItem(si StorageItem) bool {
 	if ok!=nil {
 		return false
 	}
-
         s.muDb.Lock()
         defer s.muDb.Unlock()
         s.storageItems[si.Target]=si
@@ -79,9 +94,6 @@ func (s *Server) GetStorageItem(itemN [20]byte) (StorageItem, bool){
         s.muDb.Lock()
         defer s.muDb.Unlock()
         newItem,ok := s.storageItems[itemN]
-/*      if ok {
-                *si = newItem
-        }*/
 	return newItem,ok
 }
 

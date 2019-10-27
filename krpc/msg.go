@@ -37,8 +37,13 @@ type MsgArgs struct {
 	Want        []Want `bencode:"want,omitempty"`         // Contains strings like "n4" and "n6" from BEP 32.
 	NoSeed      int    `bencode:"noseed,omitempty"`       // BEP 33
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
-	Seq         int    `bencode:"seq,omitempty"`          // BEP 44
-	V           interface{} `bencode:"v,omitempty"`            // BEP 44
+
+	Seq         int             `bencode:"seq,omitempty"`          // BEP 44
+	V           interface{}     `bencode:"v,omitempty"`            // BEP 44
+	Cas         uint64          `bencode:"cas,omitempty"`          // BEP 44
+	K           [32]byte        `bencode:"k,omitempty"`            // BEP 44
+	Salt        string          `bencode:"salt,omitempty"`         // BEP 44
+        Sig         [64]byte        `bencode:"sig,omitempty"`          // BEP 44
 }
 
 type Want string
