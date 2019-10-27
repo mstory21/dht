@@ -30,13 +30,15 @@ type Msg struct {
 type MsgArgs struct {
 	ID          ID     `bencode:"id"`                     // ID of the querying Node
 	InfoHash    ID     `bencode:"info_hash,omitempty"`    // InfoHash of the torrent
-	Target      ID     `bencode:"target,omitempty"`       // ID of the node sought
+	Target      ID     `bencode:"target,omitempty"`       // ID of the node sought or the Store Key
 	Token       string `bencode:"token,omitempty"`        // Token received from an earlier get_peers query
 	Port        *int   `bencode:"port,omitempty"`         // Sender's torrent port
 	ImpliedPort bool   `bencode:"implied_port,omitempty"` // Use senders apparent DHT port
 	Want        []Want `bencode:"want,omitempty"`         // Contains strings like "n4" and "n6" from BEP 32.
 	NoSeed      int    `bencode:"noseed,omitempty"`       // BEP 33
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
+	Seq         int    `bencode:"seq,omitempty"`          // BEP 44
+	V           interface{} `bencode:"v,omitempty"`            // BEP 44
 }
 
 type Want string
@@ -52,6 +54,7 @@ type Return struct {
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"` // K closest nodes to the requested target
 	Token  *string             `bencode:"token,omitempty"`  // Token for future announce_peer
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
+        V      interface{}         `bencode:"v,omitempty"` // BEP 44
 }
 
 func (r Return) ForAllNodes(f func(NodeInfo)) {

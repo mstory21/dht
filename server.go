@@ -22,6 +22,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/krpc"
+
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -37,6 +38,7 @@ type Server struct {
 	resendDelay func() time.Duration
 
 	mu           sync.RWMutex
+	muDb         sync.RWMutex
 	transactions map[transactionKey]*Transaction
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
@@ -46,6 +48,7 @@ type Server struct {
 	config       ServerConfig
 	stats        ServerStats
 	sendLimit    *rate.Limiter
+	storageItems map[[20]byte]StorageItem
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -174,6 +177,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			k: 8,
 		},
 		sendLimit: defaultSendLimiter,
+		storageItems: make(map[[20]byte]StorageItem),
 	}
 	if s.config.ConnectionTracking == nil {
 		s.config.ConnectionTracking = conntrack.NewInstance()
@@ -454,6 +458,20 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
 		}
 		s.reply(source, m.T, krpc.Return{})
+	case "get":
+		var r krpc.Return
+                if err := s.setReturnNodes(&r, m, source); err != nil {
+                        s.sendError(source, m.T, *err)
+                        break
+                }
+                r.Token = func() *string {
+                        t := s.createToken(source)
+                        return &t
+                }()
+		item,_ := s.GetStorageItem(args.Target)
+		r.V = item.V
+                s.reply(source, m.T, r)
+
 	default:
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
 	}
@@ -774,6 +792,19 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 	})
 }
 
+func (s *Server) put (node Addr, itemN [20]byte, token string) error {
+	item,ok := s.GetStorageItem(itemN)
+	if !ok {
+		return errors.New("nothing to put")
+	}
+	return s.query(node, "put", &krpc.MsgArgs{
+		Token:           token,
+		V:               item.V,
+		},func(m krpc.Msg, err error) {
+//			fmt.Printf("%v\n",m.Error())
+		})
+}
+
 // Add response nodes to node table.
 func (s *Server) addResponseNodes(d krpc.Msg) {
 	if d.R == nil {
@@ -902,6 +933,31 @@ func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc
 	return m, err
 }
 
+func (s *Server) get(ctx context.Context, addr Addr, target [20]byte) (krpc.Msg, error) {
+        m, err := s.queryContext(ctx, addr, "get", &krpc.MsgArgs{
+                Target: target,
+                Want:     []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+        })
+        s.mu.Lock()
+        defer s.mu.Unlock()
+        s.addResponseNodes(m)
+        if m.R != nil {
+                if m.R.Token == nil {
+                        expvars.Add("get responses with no token", 1)
+                } else if len(*m.R.Token) == 0 {
+                        expvars.Add("get responses with empty token", 1)
+                } else {
+                        expvars.Add("get responses with token", 1)
+                }
+/*                if m.SenderID() != nil && m.R.Token != nil {
+                        if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+                                n.announceToken = m.R.Token
+                        }
+                }*/
+        }
+        return m, err
+}
+
 func (s *Server) closestGoodNodeInfos(
 	k int,
 	targetID int160,
@@ -962,3 +1018,5 @@ func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
 func (s *Server) logger() log.Logger {
 	return s.config.Logger
 }
+
+
