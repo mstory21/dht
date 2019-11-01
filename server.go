@@ -21,8 +21,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 
-	"github.com/anacrolix/dht/v2/krpc"
-
+	"github.com/fluturenet/dht/krpc"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -176,7 +175,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
-		sendLimit: defaultSendLimiter,
+		sendLimit:    defaultSendLimiter,
 		storageItems: make(map[[20]byte]StorageItem),
 	}
 	if s.config.ConnectionTracking == nil {
@@ -460,17 +459,17 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		s.reply(source, m.T, krpc.Return{})
 	case "get":
 		var r krpc.Return
-                if err := s.setReturnNodes(&r, m, source); err != nil {
-                        s.sendError(source, m.T, *err)
-                        break
-                }
-                r.Token = func() *string {
-                        t := s.createToken(source)
-                        return &t
-                }()
-		item,_ := s.GetStorageItem(args.Target)
+		if err := s.setReturnNodes(&r, m, source); err != nil {
+			s.sendError(source, m.T, *err)
+			break
+		}
+		r.Token = func() *string {
+			t := s.createToken(source)
+			return &t
+		}()
+		item, _ := s.GetStorageItem(args.Target)
 		r.V = item.V
-                s.reply(source, m.T, r)
+		s.reply(source, m.T, r)
 
 	default:
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
@@ -792,17 +791,22 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 	})
 }
 
-func (s *Server) put (node Addr, itemN [20]byte, token string) error {
-	item,ok := s.GetStorageItem(itemN)
+func (s *Server) put(node Addr, itemN [20]byte, token string) error {
+	item, ok := s.GetStorageItem(itemN)
 	if !ok {
 		return errors.New("nothing to put")
 	}
 	return s.query(node, "put", &krpc.MsgArgs{
-		Token:           token,
-		V:               item.V,
-		},func(m krpc.Msg, err error) {
-//			fmt.Printf("%v\n",m.Error())
-		})
+		Token: token,
+		V:     item.V,
+		K:     item.K,
+		Sig:   item.Sig,
+		Seq:   item.Seq,
+		Cas:   item.Cas,
+		Salt:  item.Salt,
+	}, func(m krpc.Msg, err error) {
+		//					fmt.Printf("put %v\n",m.Error())
+	})
 }
 
 // Add response nodes to node table.
@@ -934,28 +938,28 @@ func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc
 }
 
 func (s *Server) get(ctx context.Context, addr Addr, target [20]byte) (krpc.Msg, error) {
-        m, err := s.queryContext(ctx, addr, "get", &krpc.MsgArgs{
-                Target: target,
-                Want:     []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-        })
-        s.mu.Lock()
-        defer s.mu.Unlock()
-        s.addResponseNodes(m)
-        if m.R != nil {
-                if m.R.Token == nil {
-                        expvars.Add("get responses with no token", 1)
-                } else if len(*m.R.Token) == 0 {
-                        expvars.Add("get responses with empty token", 1)
-                } else {
-                        expvars.Add("get responses with token", 1)
-                }
-/*                if m.SenderID() != nil && m.R.Token != nil {
-                        if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
-                                n.announceToken = m.R.Token
-                        }
-                }*/
-        }
-        return m, err
+	m, err := s.queryContext(ctx, addr, "get", &krpc.MsgArgs{
+		Target: target,
+		Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.addResponseNodes(m)
+	if m.R != nil {
+		if m.R.Token == nil {
+			expvars.Add("get responses with no token", 1)
+		} else if len(*m.R.Token) == 0 {
+			expvars.Add("get responses with empty token", 1)
+		} else {
+			expvars.Add("get responses with token", 1)
+		}
+		/*                if m.SenderID() != nil && m.R.Token != nil {
+		                  if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+		                          n.announceToken = m.R.Token
+		                  }
+		          }*/
+	}
+	return m, err
 }
 
 func (s *Server) closestGoodNodeInfos(
@@ -1018,5 +1022,3 @@ func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
 func (s *Server) logger() log.Logger {
 	return s.config.Logger
 }
-
-

@@ -2,6 +2,7 @@ package krpc
 
 import (
 	"fmt"
+	_ "github.com/fluturenet/ed25519"
 )
 
 // Msg represents messages that nodes in the network send to each other as specified by the protocol.
@@ -38,12 +39,12 @@ type MsgArgs struct {
 	NoSeed      int    `bencode:"noseed,omitempty"`       // BEP 33
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
 
-	Seq         int             `bencode:"seq,omitempty"`          // BEP 44
-	V           interface{}     `bencode:"v,omitempty"`            // BEP 44
-	Cas         uint64          `bencode:"cas,omitempty"`          // BEP 44
-	K           [32]byte        `bencode:"k,omitempty"`            // BEP 44
-	Salt        string          `bencode:"salt,omitempty"`         // BEP 44
-        Sig         [64]byte        `bencode:"sig,omitempty"`          // BEP 44
+	Seq  uint64      `bencode:"seq,omitempty"`  // BEP 44
+	V    interface{} `bencode:"v,omitempty"`    // BEP 44
+	Cas  []byte      `bencode:"cas,omitempty"`  // BEP 44
+	K    Bytes32     `bencode:"k,omitempty"`    // BEP 44
+	Salt []byte      `bencode:"salt,omitempty"` // BEP 44
+	Sig  Bytes64     `bencode:"sig,omitempty"`  // BEP 44
 }
 
 type Want string
@@ -59,7 +60,11 @@ type Return struct {
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"` // K closest nodes to the requested target
 	Token  *string             `bencode:"token,omitempty"`  // Token for future announce_peer
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
-        V      interface{}         `bencode:"v,omitempty"` // BEP 44
+	V      interface{}         `bencode:"v,omitempty"`      // BEP 44
+	K      [32]byte            `bencode:"k,omitempty"`      // BEP 44
+	Sig    [64]byte            `bencode:"sig,omitempty"`    // BEP 44
+	Seq    uint64              `bencode:"seq,omitempty"`    // BEP 44
+
 }
 
 func (r Return) ForAllNodes(f func(NodeInfo)) {

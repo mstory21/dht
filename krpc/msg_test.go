@@ -81,7 +81,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 		Y: "q",
 		Q: "get",
 		T: "hi",
-                A: &MsgArgs{
+		A: &MsgArgs{
 			Target: IdFromString("abcdefghil1234567890"),
 		},
 	}, "d1:ad2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x006:target20:abcdefghil1234567890e1:q3:get1:t2:hi1:y1:qe")

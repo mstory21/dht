@@ -11,16 +11,17 @@ import (
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/fluturenet/dht/krpc"
+
+	"crypto/sha1"
 
 	_ "fmt"
 )
 
 type StorageAnswer struct {
 	StorageItem StorageItem
-	NodeInfo krpc.NodeInfo
+	NodeInfo    krpc.NodeInfo
 }
-
 
 // Maintains state for an ongoing ArbitraryData operation. An ArbitraryData is started
 // by calling Server.ArbitraryData.
@@ -30,13 +31,14 @@ type ArbitraryData struct {
 	// Inner chan is set to nil when on close.
 	values     chan StorageAnswer
 	target     [20]byte
+	seq        uint64
 	ctx        context.Context
 	cancel     func()
 	stop       <-chan struct{}
 	triedAddrs *bloom.BloomFilter
 	// How many transactions are still ongoing.
-	pending  int
-	server   *Server
+	pending int
+	server  *Server
 	// Count of (probably) distinct addresses we've sent get_peers requests
 	// to.
 	numContacted int
@@ -46,6 +48,16 @@ type ArbitraryData struct {
 	contactRateLimiter  chan struct{}
 }
 
+// Claculates the target from the public key
+func TargetFromPublicKey(pkey []byte) [20]byte {
+	return sha1.Sum(pkey)
+}
+
+// Claculates the target from the public key with salt
+func TargetFromPublicKeyWithSalt(pkey, salt []byte) [20]byte {
+	return sha1.Sum(append(pkey, salt...))
+}
+
 // Returns the number of distinct remote addresses the ArbitraryData has queried.
 func (a *ArbitraryData) NumContacted() int {
 	a.mu.Lock()
@@ -53,22 +65,22 @@ func (a *ArbitraryData) NumContacted() int {
 	return a.numContacted
 }
 
-// This is kind of the main thing you want to do with DHT. It traverses the
-// graph toward nodes that store peers for the infohash, streaming them to the
-// caller, and announcing the local node to each node if allowed and
-// specified.
-func (s *Server) ArbitraryData(target [20]byte) (*ArbitraryData, error) {
+// This is kind of the second thing you want to do with DHT. It traverses the nodes and saves-retrieves th Arbitrary Storage Item
+func (s *Server) ArbitraryData(target [20]byte, seq *uint64) (*ArbitraryData, error) {
 	startAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return nil, err
 	}
 	a := &ArbitraryData{
-		Value:               make(chan StorageAnswer,100),
-		values:              make(chan StorageAnswer),
-		triedAddrs:          newBloomFilterForTraversal(),
-		server:              s,
-		target:                 target,
-		contactRateLimiter:  make(chan struct{}, 10),
+		Value:              make(chan StorageAnswer, 100),
+		values:             make(chan StorageAnswer),
+		triedAddrs:         newBloomFilterForTraversal(),
+		server:             s,
+		target:             target,
+		contactRateLimiter: make(chan struct{}, 10),
+	}
+	if seq != nil {
+		a.seq = *seq
 	}
 	a.ctx, a.cancel = context.WithCancel(context.Background())
 	a.stop = a.ctx.Done()
@@ -114,7 +126,6 @@ func (a *ArbitraryData) rateUnlimiter() {
 	}
 }
 
-
 func (a *ArbitraryData) shouldContact(addr krpc.NodeAddr) bool {
 	if !validNodeAddr(addr.UDP()) {
 		return false
@@ -157,7 +168,8 @@ func (a *ArbitraryData) responseNode(node krpc.NodeInfo) {
 }
 
 // ArbitraryData Put to a peer, if appropriate.
-func (a *ArbitraryData) maybeArbitraryDataPut(to Addr, token *string, peerId *krpc.ID) {
+/*
+func (a *ArbitraryData) maybePut(to Addr, token *string, peerId *krpc.ID) {
 	if token == nil {
 		return
 	}
@@ -167,19 +179,20 @@ func (a *ArbitraryData) maybeArbitraryDataPut(to Addr, token *string, peerId *kr
 	a.server.mu.Lock()
 	defer a.server.mu.Unlock()
 	a.server.put(to, a.target, *token)
-}
+}*/
 
 func (a *ArbitraryData) get(node addrMaybeId) {
 	addr := NewAddr(node.Addr.UDP())
-	// log.Printf("sending get to %v", node)
 	m, err := a.server.get(context.TODO(), addr, a.target)
-	// log.Print(err)
-	// log.Printf("get_peers response error from %v: %v", node, err)
 	if err == nil {
 		select {
 		case a.contactRateLimiter <- struct{}{}:
 		default:
 		}
+	}
+	if m.E != nil {
+		//                fmt.Println(m.E)
+		goto end
 	}
 	// Register suggested nodes closer to the target.
 	if m.R != nil && m.SenderID() != nil {
@@ -188,28 +201,49 @@ func (a *ArbitraryData) get(node addrMaybeId) {
 		a.mu.Lock()
 		m.R.ForAllNodes(a.responseNode)
 		a.mu.Unlock()
+
+		//recevided something ..
 		if m.R.V != nil {
-			si := StorageItem {
+			si := StorageItem{
 				Target: a.target,
-				V: m.R.V,
-				}
-			sa := StorageAnswer {
+				V:      m.R.V,
+				K:      m.R.K,
+				Seq:    m.R.Seq,
+				Sig:    m.R.Sig,
+			}
+			sa := StorageAnswer{
 				StorageItem: si,
-	                        NodeInfo: krpc.NodeInfo{
-        	                        Addr: addr.KRPC(),
-                	                ID:   *m.SenderID(),
-                        	},
+				NodeInfo: krpc.NodeInfo{
+					Addr: addr.KRPC(),
+					ID:   *m.SenderID(),
+				},
 			}
 			select {
 			case a.values <- sa:
 			case <-a.stop:
 			}
+			//if received good data store it!
+			if si.Check() == nil {
+				a.server.AddStorageItem(si)
+			}
 		}
-		a.maybeArbitraryDataPut(addr, m.R.Token, m.SenderID())
+
+		// nothing received or received seq < storedItem.Seq PUT-IT
+		storedItem, gotItem := a.server.GetStorageItem(a.target)
+		if m.R.V == nil || (gotItem && storedItem.IsMutable() && storedItem.Seq > m.R.Seq) {
+			if m.R.Token == nil {
+				goto end
+			}
+			if !a.server.config.NoSecurity && (m.SenderID() == nil || !NodeIdSecure(*m.SenderID(), addr.IP())) {
+				goto end
+			}
+			a.server.mu.Lock()
+			defer a.server.mu.Unlock()
+			a.server.put(addr, a.target, *m.R.Token)
+		}
 	}
-	if m.E != nil {
-		//fmt.Println(m.E)
-	}
+
+end:
 	a.mu.Lock()
 	a.completeContact()
 	a.mu.Unlock()

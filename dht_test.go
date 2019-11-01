@@ -18,7 +18,7 @@ import (
 
 	"github.com/anacrolix/log"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/fluturenet/dht/krpc"
 )
 
 func TestSetNilBigInt(t *testing.T) {

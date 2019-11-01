@@ -11,7 +11,7 @@ import (
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/fluturenet/dht/krpc"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started

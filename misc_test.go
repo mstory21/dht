@@ -10,14 +10,14 @@ import (
 func TestNodesByDistance(t *testing.T) {
 	var a nodesByDistance
 	amis := []addrMaybeId{
-		addrMaybeId{},
-		addrMaybeId{Id: new(int160)},
-		addrMaybeId{Id: func() *int160 {
+		{},
+		{Id: new(int160)},
+		{Id: func() *int160 {
 			var i int160
 			i.bits[13] = 1
 			return &i
 		}()},
-		addrMaybeId{Id: func() *int160 {
+		{Id: func() *int160 {
 			var i int160
 			i.bits[12] = 1
 			return &i
