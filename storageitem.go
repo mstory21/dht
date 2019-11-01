@@ -9,7 +9,7 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 
 	"fmt"
-	"time"
+	_ "time"
 )
 
 // this is the local representation of a Storage Item
@@ -25,7 +25,7 @@ type StorageItem struct {
 
 	PrivateKey ed25519.PrivateKey
 
-	lastUpdate time.Time
+	//lastUpdate time.Time
 }
 
 // calculates the target and the signature of a Storage Item
@@ -121,7 +121,7 @@ func (s *Server) AddStorageItem(si StorageItem) bool {
 	if storeIT {
 		s.muDb.Lock()
 		defer s.muDb.Unlock()
-		si.lastUpdate = time.Now()
+		//si.lastUpdate = time.Now()
 		s.storageItems[si.Target] = si
 		return true
 	}

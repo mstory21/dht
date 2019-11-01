@@ -457,6 +457,23 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
 		}
 		s.reply(source, m.T, krpc.Return{})
+	case "put":
+		if !s.validToken(args.Token, source) {
+			expvars.Add("received put with invalid token", 1)
+			return
+		}
+		expvars.Add("received put with valid token", 1)
+		si := StorageItem{
+			Target: args.Target,
+			V:      args.V,
+			K:      args.K,
+			Cas:    args.Cas,
+			Seq:    args.Seq,
+			Sig:    args.Sig,
+		}
+		s.AddStorageItem(si)
+		s.reply(source, m.T, krpc.Return{})
+
 	case "get":
 		var r krpc.Return
 		if err := s.setReturnNodes(&r, m, source); err != nil {
@@ -467,8 +484,13 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			t := s.createToken(source)
 			return &t
 		}()
-		item, _ := s.GetStorageItem(args.Target)
-		r.V = item.V
+		item, getOK := s.GetStorageItem(args.Target)
+		if getOK {
+			r.V = item.V
+			r.K = item.K
+			r.Seq = item.Seq
+			r.Sig = item.Sig
+		}
 		s.reply(source, m.T, r)
 
 	default:
