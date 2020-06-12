@@ -3,7 +3,7 @@ package dht
 import (
 	"crypto/sha1"
 
-	"github.com/fluturenet/ed25519"
+	"github.com/cretz/bine/torutil/ed25519"
 	"golang.org/x/exp/errors"
 
 	"github.com/anacrolix/torrent/bencode"
@@ -44,7 +44,7 @@ func (s *StorageItem) Calc() error {
 		return nil
 	}
 
-	copy(s.K[:], s.PrivateKey.PublicKey())
+	copy(s.K[:], s.PrivateKey.Public().(ed25519.PublicKey))
 	if s.Salt == nil {
 		s.Target = sha1.Sum(s.K[:])
 	} else {
@@ -122,7 +122,7 @@ func (s *Server) AddStorageItem(si StorageItem) bool {
 		s.muDb.Lock()
 		defer s.muDb.Unlock()
 		//si.lastUpdate = time.Now()
-		s.storageItems[si.Target] = si
+		s.storageItems[int160FromByteArray(si.Target)] = si
 		return true
 	}
 	return false
@@ -131,6 +131,6 @@ func (s *Server) AddStorageItem(si StorageItem) bool {
 func (s *Server) GetStorageItem(itemN [20]byte) (StorageItem, bool) {
 	s.muDb.Lock()
 	defer s.muDb.Unlock()
-	newItem, ok := s.storageItems[itemN]
+	newItem, ok := s.storageItems[int160FromByteArray(itemN)]
 	return newItem, ok
 }

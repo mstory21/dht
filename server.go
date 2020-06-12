@@ -23,7 +23,7 @@ import (
 
 	"github.com/anacrolix/stm"
 
-	"github.com/fluturenet/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -48,16 +48,12 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
-<<<<<<< HEAD
-	sendLimit    *rate.Limiter
-	storageItems map[[20]byte]StorageItem
-=======
+	storageItems map[int160]StorageItem
 	sendLimit    interface {
 		Wait(ctx context.Context) error
 		Allow() bool
 		AllowStm(tx *stm.Tx) bool
 	}
->>>>>>> upstream/master
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -182,7 +178,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			k: 8,
 		},
 		sendLimit:    defaultSendLimiter,
-		storageItems: make(map[[20]byte]StorageItem),
+		storageItems: make(map[int160]StorageItem),
 	}
 	if s.config.ConnectionTracking == nil {
 		s.config.ConnectionTracking = conntrack.NewInstance()
@@ -256,7 +252,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 				}
 			}
 			// if missinggo.CryHeard() {
-			// 	log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
+			//		log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
 			// }
 		}()
 		return
@@ -849,8 +845,8 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 	return
 }
 
-func (s *Server) put(node Addr, itemN [20]byte, token string) error {
-	item, ok := s.GetStorageItem(itemN)
+func (s *Server) put(node Addr, itemN int160, token string) error {
+	item, ok := s.GetStorageItem(itemN.AsByteArray())
 	if !ok {
 		return errors.New("nothing to put")
 	}
@@ -950,9 +946,9 @@ func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160, scrap
 	return m, writes, err
 }
 
-func (s *Server) get(ctx context.Context, addr Addr, target [20]byte) (krpc.Msg, error) {
-	m, err := s.queryContext(ctx, addr, "get", &krpc.MsgArgs{
-		Target: target,
+func (s *Server) get(ctx context.Context, addr Addr, target int160) (krpc.Msg, numWrites, error) {
+	m, writes, err := s.queryContext(ctx, addr, "get", &krpc.MsgArgs{
+		Target: target.AsByteArray(),
 		Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 	})
 	s.mu.Lock()
@@ -967,12 +963,12 @@ func (s *Server) get(ctx context.Context, addr Addr, target [20]byte) (krpc.Msg,
 			expvars.Add("get responses with token", 1)
 		}
 		/*                if m.SenderID() != nil && m.R.Token != nil {
-		                  if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
-		                          n.announceToken = m.R.Token
-		                  }
-		          }*/
+					if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+							  n.announceToken = m.R.Token
+					}
+		 }*/
 	}
-	return m, err
+	return m, writes, err
 }
 
 func (s *Server) closestGoodNodeInfos(

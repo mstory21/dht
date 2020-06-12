@@ -15,7 +15,7 @@ import (
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 
-	"github.com/fluturenet/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func defaultQueryResendDelay() time.Duration {

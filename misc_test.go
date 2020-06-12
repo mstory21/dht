@@ -27,25 +27,7 @@ var sampleAddrMaybeIds = []addrMaybeId{
 }
 
 func TestNodesByDistance(t *testing.T) {
-<<<<<<< HEAD
-	var a nodesByDistance
-	amis := []addrMaybeId{
-		{},
-		{Id: new(int160)},
-		{Id: func() *int160 {
-			var i int160
-			i.bits[13] = 1
-			return &i
-		}()},
-		{Id: func() *int160 {
-			var i int160
-			i.bits[12] = 1
-			return &i
-		}()},
-	}
-=======
 	a := nodesByDistance(int160{})
->>>>>>> upstream/master
 	push := func(i int) {
 		a = a.Add(sampleAddrMaybeIds[i])
 	}

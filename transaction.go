@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/fluturenet/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 // Transaction keeps track of a message exchange between nodes, such as a

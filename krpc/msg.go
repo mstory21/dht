@@ -2,7 +2,7 @@ package krpc
 
 import (
 	"fmt"
-	_ "github.com/fluturenet/ed25519"
+	_ "github.com/cretz/bine/torutil/ed25519"
 )
 
 // Msg represents messages that nodes in the network send to each other as specified by the protocol.

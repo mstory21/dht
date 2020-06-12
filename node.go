@@ -3,7 +3,7 @@ package dht
 import (
 	"time"
 
-	"github.com/fluturenet/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 type nodeKey struct {

@@ -5,14 +5,10 @@ import (
 	"hash/fnv"
 	"net"
 
-<<<<<<< HEAD
-	"github.com/fluturenet/dht/krpc"
-=======
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/stm/stmutil"
 
 	"github.com/anacrolix/dht/v2/krpc"
->>>>>>> upstream/master
 )
 
 func mustListen(addr string) net.PacketConn {
