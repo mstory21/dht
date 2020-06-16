@@ -2,6 +2,7 @@ package krpc
 
 import (
 	"fmt"
+	_ "github.com/fluturenet/ed25519"
 )
 
 // Msg represents messages that nodes in the network send to each other as specified by the protocol.
@@ -30,13 +31,20 @@ type Msg struct {
 type MsgArgs struct {
 	ID          ID     `bencode:"id"`                     // ID of the querying Node
 	InfoHash    ID     `bencode:"info_hash,omitempty"`    // InfoHash of the torrent
-	Target      ID     `bencode:"target,omitempty"`       // ID of the node sought
+	Target      ID     `bencode:"target,omitempty"`       // ID of the node sought or the Store Key
 	Token       string `bencode:"token,omitempty"`        // Token received from an earlier get_peers query
 	Port        *int   `bencode:"port,omitempty"`         // Sender's torrent port
 	ImpliedPort bool   `bencode:"implied_port,omitempty"` // Use senders apparent DHT port
 	Want        []Want `bencode:"want,omitempty"`         // Contains strings like "n4" and "n6" from BEP 32.
 	NoSeed      int    `bencode:"noseed,omitempty"`       // BEP 33
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
+
+	Seq  uint64      `bencode:"seq,omitempty"`  // BEP 44
+	V    interface{} `bencode:"v,omitempty"`    // BEP 44
+	Cas  []byte      `bencode:"cas,omitempty"`  // BEP 44
+	K    Bytes32     `bencode:"k,omitempty"`    // BEP 44
+	Salt []byte      `bencode:"salt,omitempty"` // BEP 44
+	Sig  Bytes64     `bencode:"sig,omitempty"`  // BEP 44
 }
 
 type Want string
@@ -56,6 +64,11 @@ type Return struct {
 	// BEP 33
 	BFsd *ScrapeBloomFilter `bencode:"BFsd,omitempty"`
 	BFpe *ScrapeBloomFilter `bencode:"BFpe,omitempty"`
+	V    interface{}        `bencode:"v,omitempty"`   // BEP 44
+	K    [32]byte           `bencode:"k,omitempty"`   // BEP 44
+	Sig  [64]byte           `bencode:"sig,omitempty"` // BEP 44
+	Seq  uint64             `bencode:"seq,omitempty"` // BEP 44
+
 }
 
 func (r Return) ForAllNodes(f func(NodeInfo)) {

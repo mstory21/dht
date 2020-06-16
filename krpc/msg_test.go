@@ -81,6 +81,14 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 			Port: 62844,
 		},
 	}, "d2:ip6:|\xa8\xb4\b\xf5|1:rd2:id20:\xeb\xff6isQ\xffJ\xec)ͺ\xab\xf2\xfb\xe3F|\xc2ge1:t1:\x031:y1:re")
+	testMarshalUnmarshalMsg(t, Msg{
+		Y: "q",
+		Q: "get",
+		T: "hi",
+		A: &MsgArgs{
+			Target: IdFromString("abcdefghil1234567890"),
+		},
+	}, "d1:ad2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x006:target20:abcdefghil1234567890e1:q3:get1:t2:hi1:y1:qe")
 }
 
 func TestUnmarshalGetPeersResponse(t *testing.T) {

@@ -23,7 +23,7 @@ import (
 
 	"github.com/anacrolix/stm"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/fluturenet/dht/krpc"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -39,6 +39,7 @@ type Server struct {
 	resendDelay func() time.Duration
 
 	mu           sync.RWMutex
+	muDb         sync.RWMutex
 	transactions map[transactionKey]*Transaction
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
@@ -47,11 +48,16 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
+<<<<<<< HEAD
+	sendLimit    *rate.Limiter
+	storageItems map[[20]byte]StorageItem
+=======
 	sendLimit    interface {
 		Wait(ctx context.Context) error
 		Allow() bool
 		AllowStm(tx *stm.Tx) bool
 	}
+>>>>>>> upstream/master
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -175,7 +181,8 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
-		sendLimit: defaultSendLimiter,
+		sendLimit:    defaultSendLimiter,
+		storageItems: make(map[[20]byte]StorageItem),
 	}
 	if s.config.ConnectionTracking == nil {
 		s.config.ConnectionTracking = conntrack.NewInstance()
@@ -454,6 +461,42 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
 		}
 		s.reply(source, m.T, krpc.Return{})
+	case "put":
+		if !s.validToken(args.Token, source) {
+			expvars.Add("received put with invalid token", 1)
+			return
+		}
+		expvars.Add("received put with valid token", 1)
+		si := StorageItem{
+			Target: args.Target,
+			V:      args.V,
+			K:      args.K,
+			Cas:    args.Cas,
+			Seq:    args.Seq,
+			Sig:    args.Sig,
+		}
+		s.AddStorageItem(si)
+		s.reply(source, m.T, krpc.Return{})
+
+	case "get":
+		var r krpc.Return
+		if err := s.setReturnNodes(&r, m, source); err != nil {
+			s.sendError(source, m.T, *err)
+			break
+		}
+		r.Token = func() *string {
+			t := s.createToken(source)
+			return &t
+		}()
+		item, getOK := s.GetStorageItem(args.Target)
+		if getOK {
+			r.V = item.V
+			r.K = item.K
+			r.Seq = item.Seq
+			r.Sig = item.Sig
+		}
+		s.reply(source, m.T, r)
+
 	default:
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
 	}
@@ -806,6 +849,24 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 	return
 }
 
+func (s *Server) put(node Addr, itemN [20]byte, token string) error {
+	item, ok := s.GetStorageItem(itemN)
+	if !ok {
+		return errors.New("nothing to put")
+	}
+	return s.query(node, "put", &krpc.MsgArgs{
+		Token: token,
+		V:     item.V,
+		K:     item.K,
+		Sig:   item.Sig,
+		Seq:   item.Seq,
+		Cas:   item.Cas,
+		Salt:  item.Salt,
+	}, func(m krpc.Msg, err error) {
+		//					fmt.Printf("put %v\n",m.Error())
+	})
+}
+
 // Add response nodes to node table.
 func (s *Server) addResponseNodes(d krpc.Msg) {
 	if d.R == nil {
@@ -887,6 +948,31 @@ func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160, scrap
 		}
 	}
 	return m, writes, err
+}
+
+func (s *Server) get(ctx context.Context, addr Addr, target [20]byte) (krpc.Msg, error) {
+	m, err := s.queryContext(ctx, addr, "get", &krpc.MsgArgs{
+		Target: target,
+		Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.addResponseNodes(m)
+	if m.R != nil {
+		if m.R.Token == nil {
+			expvars.Add("get responses with no token", 1)
+		} else if len(*m.R.Token) == 0 {
+			expvars.Add("get responses with empty token", 1)
+		} else {
+			expvars.Add("get responses with token", 1)
+		}
+		/*                if m.SenderID() != nil && m.R.Token != nil {
+		                  if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+		                          n.announceToken = m.R.Token
+		                  }
+		          }*/
+	}
+	return m, err
 }
 
 func (s *Server) closestGoodNodeInfos(

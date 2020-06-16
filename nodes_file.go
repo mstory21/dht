@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/fluturenet/dht/krpc"
 )
 
 func WriteNodesToFile(ns []krpc.NodeInfo, fileName string) (err error) {
